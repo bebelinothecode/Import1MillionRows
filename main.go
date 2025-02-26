@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"time"
 	"github.com/example/database"
+	"github.com/lib/pq"
 )
 
 func main() {
@@ -41,8 +42,9 @@ func main() {
 	if err != nil {
 		log.Fatal("Error beginning a transaction:",err)
 	}
+	defer tx.Rollback()
 
-	statement, err := tx.Prepare("INSERT INTO bebelino (name, email, phone, address) VALUES ($1, $2, $3, $4)")
+	statement, err := tx.Prepare(pq.CopyIn("bebelino","name", "email", "phone", "address"))
 	if err != nil {
 		log.Fatal("Error preparing sql statement:",err)
 	}
@@ -50,18 +52,23 @@ func main() {
 
 	var rowCount int
 	for _, record := range records {
-		_, err := statement.Exec(record[0], record[1], record[2], record[3])
+		_, err := statement.Exec(record[1], record[2], record[3], record[4])
 		if err != nil {
 			log.Fatal("Error inserting record",err)
 			tx.Rollback()
-			return
+			continue
 		}
 		rowCount++
 	}
 
+	_, err = statement.Exec()
+		if err != nil {
+			log.Fatal("Error flushing statement:", err)		
+		}
+
 	err = tx.Commit()
 	if err != nil {
-		log.Fatal("Error commit transacction:", err)
+		log.Fatal("Error commit transaction:", err)
 	} 
 
 	duration := time.Since(startTime)
